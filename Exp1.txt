@@ -1,0 +1,32 @@
+
+import pandas as pd
+from google.colab import files
+import io
+# Upload dataset
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+# Read dataset
+data = pd.read_csv(io.BytesIO(uploaded[filename]))
+data.columns = data.columns.str.strip()
+
+# Remove unnecessary index columns
+data = data.loc[:, ~data.columns.str.lower().str.startswith("unnamed")]
+print("Training Dataset:")
+print(data)
+# Separate attributes and target
+X = data.iloc[:, :-1].astype(str).values
+y = data.iloc[:, -1].astype(str).str.strip().str.lower().values
+# FIND-S Algorithm
+hypothesis = None
+for i in range(len(X)):
+    if y[i] == "yes":
+        if hypothesis is None:
+            hypothesis = list(X[i])
+        else:
+            for j in range(len(hypothesis)):
+                if hypothesis[j] != X[i][j]:
+                    hypothesis[j] = "?"
+
+        print("Iteration", i + 1, ":", hypothesis)
+print("\nFinal Most Specific Hypothesis:")
+print(hypothesis)\

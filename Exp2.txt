@@ -1,0 +1,75 @@
+
+import pandas as pd
+from google.colab import files
+import io
+from itertools import product
+# Upload CSV file
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+data = pd.read_csv(io.BytesIO(uploaded[filename]))
+data.columns = data.columns.str.strip()
+data = data.loc[:, ~data.columns.str.lower().str.startswith("unnamed")]
+data = data.dropna()
+print("Training Dataset:")
+print(data.to_string(index=False))
+# Separate attributes and class labels
+X = data.iloc[:, :-1].astype(str).values
+y = data.iloc[:, -1].astype(str).str.strip().str.lower().values
+# Attribute domains
+domains = [
+    sorted(set(X[:, i]))
+    for i in range(X.shape[1])
+]
+# Generate all conjunctive hypotheses
+choices = [
+    ["NULL"] + d + ["?"]
+    for d in domains
+]
+hypotheses = list(product(*choices))
+def covers(h, x):
+    return all(
+        a == "?" or (a != "NULL" and a == v)
+        for a, v in zip(h, x)
+    )
+def more_general(h1, h2):
+    return all(
+        a == "?" or a == b or b == "NULL"
+        for a, b in zip(h1, h2)
+    )
+# Initially all hypotheses are possible
+version_space = hypotheses
+for i in range(len(X)):
+    x = X[i]
+    label = y[i]
+    if label not in ("yes", "no"):
+        raise ValueError("Target labels must be Yes or No")
+    version_space = [
+        h for h in version_space
+        if covers(h, x) == (label == "yes")
+    ]
+    # Specific boundary
+    S = [
+        h for h in version_space
+        if not any(
+            h != other and
+            more_general(h, other)
+            for other in version_space
+        )
+    ]
+    # General boundary
+    G = [
+        h for h in version_space
+        if not any(
+            h != other and
+            more_general(other, h)
+            for other in version_space
+        )
+    ]
+    print("\nTraining Example:", i + 1)
+    print("Specific Boundary S:", S)
+    print("General Boundary G:", G)
+print("\nFINAL VERSION SPACE")
+print("Specific Boundary S:", S)
+print("General Boundary G:", G)
+print("Number of Consistent Hypotheses:",
+      len(version_space))\

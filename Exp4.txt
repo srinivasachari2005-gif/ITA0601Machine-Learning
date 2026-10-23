@@ -1,0 +1,63 @@
+import numpy as np
+import pandas as pd
+from google.colab import files
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import accuracy_score
+# Upload dataset
+uploaded = files.upload()
+data = pd.read_csv(next(iter(uploaded)))
+data.columns = data.columns.str.strip()
+data = data.loc[:, ~data.columns.str.lower().str.startswith("unnamed")]
+data = data.dropna()
+# Preprocessing
+X = data.iloc[:, :-1].astype(str)
+y = data.iloc[:, -1].astype(str).str.strip().str.lower()
+y = y.map({"yes": 1, "no": 0})
+if y.isnull().any():
+    raise ValueError("Target labels must be Yes/No")
+encoder = OneHotEncoder(sparse_output=False,
+                        handle_unknown="ignore")
+X = encoder.fit_transform(X)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y.values.reshape(-1, 1),
+    test_size=0.2, random_state=42, stratify=y
+)
+# Initialize ANN
+np.random.seed(42)
+W1 = np.random.randn(X_train.shape[1], 8) * 0.1
+b1 = np.zeros((1, 8))
+W2 = np.random.randn(8, 1) * 0.1
+b2 = np.zeros((1, 1))
+def sigmoid(x):
+    return 1 / (1 + np.exp(-np.clip(x, -500, 500)))
+# Backpropagation
+for epoch in range(5000):
+    a1 = sigmoid(np.dot(X_train, W1) + b1)
+    a2 = sigmoid(np.dot(a1, W2) + b2)
+    loss = -np.mean(
+        y_train * np.log(a2 + 1e-9) +
+        (1-y_train) * np.log(1-a2 + 1e-9)
+    )
+    dz2 = a2 - y_train
+    dW2 = np.dot(a1.T, dz2) / len(X_train)
+    db2 = np.mean(dz2, axis=0, keepdims=True)
+    dz1 = np.dot(dz2, W2.T) * a1 * (1-a1)
+    dW1 = np.dot(X_train.T, dz1) / len(X_train)
+    db1 = np.mean(dz1, axis=0, keepdims=True)
+    W2 -= 0.5 * dW2
+    b2 -= 0.5 * db2
+    W1 -= 0.5 * dW1
+    b1 -= 0.5 * db1
+
+    if epoch % 1000 == 0:
+        print("Epoch:", epoch, "Loss:", round(loss, 4))
+# Testing
+a1 = sigmoid(np.dot(X_test, W1) + b1)
+a2 = sigmoid(np.dot(a1, W2) + b2)
+predictions = (a2 >= 0.5).astype(int)
+print("\nActual:", y_test.flatten())
+print("Predicted:", predictions.flatten())
+print("Accuracy:",
+      round(accuracy_score(y_test, predictions)*100, 2), "%")

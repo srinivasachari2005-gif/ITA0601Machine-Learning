@@ -1,0 +1,64 @@
+import pandas as pd
+import numpy as np
+from google.colab import files
+import io
+from pprint import pprint
+# Upload and read dataset
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+data = pd.read_csv(io.BytesIO(uploaded[filename]))
+data.columns = data.columns.str.strip()
+data = data.loc[:, ~data.columns.str.lower().str.startswith("unnamed")]
+data = data.dropna()
+# Entropy calculation
+def entropy(col):
+    values, counts = np.unique(col, return_counts=True)
+    probabilities = counts / sum(counts)
+    return -sum(p * np.log2(p) for p in probabilities if p > 0)
+# Information Gain
+def information_gain(data, attr, target):
+    total = entropy(data[target])
+    weighted = 0
+    for value, subset in data.groupby(attr):
+        weighted += (len(subset) / len(data)) * entropy(subset[target])
+    return total - weighted
+# ID3 Algorithm
+def id3(data, attributes, target):
+    if len(data[target].unique()) == 1:
+        return data[target].iloc[0]
+
+    if not attributes:
+        return data[target].mode()[0]
+    best = max(
+        attributes,
+        key=lambda a: information_gain(data, a, target)
+    )
+    tree = {best: {}}
+    remaining = [a for a in attributes if a != best]
+    for value, subset in data.groupby(best):
+        tree[best][value] = id3(subset, remaining, target)
+    return tree
+# Build Decision Tree
+target = data.columns[-1]
+attributes = list(data.columns[:-1])
+tree = id3(data, attributes, target)
+print("Decision Tree:")
+pprint(tree)
+# Predict new sample
+def predict(tree, sample):
+    if not isinstance(tree, dict):
+        return tree
+    attr = next(iter(tree))
+    value = sample[attr]
+    subtree = tree[attr].get(value)
+    if subtree is None:
+        return "Unknown"
+    return predict(subtree, sample)
+sample = {
+    "Outlook": "Sunny",
+    "Temperature": "Cool",
+    "Humidity": "High",
+    "Wind": "Strong"
+}
+print("\nNew Sample:", sample)
+print("Predicted Class:", predict(tree, sample))
